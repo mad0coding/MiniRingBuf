@@ -160,6 +160,7 @@ MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 			len = 0;
 		}
 	}
+	tmpLen = len; // temporarily store the value of len as the return value
 
 #if MRB_COPY_METHOD == MRB_COPY_METHOD_LOOP
 	while(len--){ MRB_write_one(mrb, *buf++); }
@@ -187,7 +188,7 @@ MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 	MRB_MUTEX_UNLOCK(mrb);
 #endif
 
-	return 0;
+	return tmpLen;
 }
 
 

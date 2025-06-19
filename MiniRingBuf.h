@@ -17,7 +17,7 @@
 #define MRB_TYPE_USE	uint16_t	// read/write length type, must <= MRB_TYPE_SIZE
 
 /* Settings definition */
-#define MRB_CALLBACK_EN			1	// enable err handle callback
+#define MRB_CALLBACK_EN				1 // enable err handle callback
 #define MRB_ERR_		0x01
 
 /* Thread safety options */
@@ -56,7 +56,7 @@ typedef struct _MiniRingBuf{
 	void *mutex;
 #endif
 #if MRB_CALLBACK_EN
-	void (*callback)(struct _MiniRingBuf*, uint8_t);
+	void (*callback)(struct _MiniRingBuf*, MRB_TYPE_BYTE);
 #endif
 }MiniRingBuf;
 
