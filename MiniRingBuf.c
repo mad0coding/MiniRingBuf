@@ -1,5 +1,10 @@
+/*
+	File:    MiniRingBuf.c
+	Author:  Light&Electricity
+	Date:    2025.6.19
+	Version: 0.5
+*/
 #include "MiniRingBuf.h"
-
 
 /* init mrb struct */
 void mrb_init(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_SIZE size, MRB_TYPE_BYTE set)
@@ -8,12 +13,15 @@ void mrb_init(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_SIZE size, MRB_TYPE_
 	mrb->buf = buf;
 	mrb->size = size;
 	mrb->set = set;
+#if MRB_CALLBACK_EN
+	mrb->callback = (void*)0; // NULL
+#endif
 }
 
 /* clear entire buf */
 void mrb_clear(MiniRingBuf *mrb)
 {
-	mrb->start = mrb->end = 0;
+	MRB_clear(mrb);
 }
 
 /* check if it's empty */
@@ -25,55 +33,136 @@ MRB_TYPE_BOOL mrb_empty(MiniRingBuf *mrb)
 /* check if it's full */
 MRB_TYPE_BOOL mrb_full(MiniRingBuf *mrb)
 {
-	return MRB_full(mrb);
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_LOCK(mrb);
+#endif
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_START(mrb);
+#endif
+
+	MRB_TYPE_BOOL ret = MRB_full(mrb);
+
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_END(mrb);
+#endif
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_UNLOCK(mrb);
+#endif
+
+	return ret;
 }
 
 /* get used length */
 MRB_TYPE_SIZE mrb_len(MiniRingBuf *mrb)
 {
-	return MRB_len(mrb);
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_LOCK(mrb);
+#endif
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_START(mrb);
+#endif
+
+	MRB_TYPE_SIZE ret = MRB_len(mrb);
+
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_END(mrb);
+#endif
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_UNLOCK(mrb);
+#endif
+
+	return ret;
 }
 
-/*  */
+/* delete items */
 MRB_TYPE_USE mrb_del(MiniRingBuf *mrb, MRB_TYPE_USE len)
 {
-	MRB_TYPE_SIZE ringBufLenNow = mrb_len(mrb); // get current len
-	if(ringBufLenNow == 0) return 0;//no data
-	if(ringBufLenNow < len) len = ringBufLenNow;//*If the data is insufficient, only delete the existing ones
-	mrb->start += len;//*Move the data header to delete
+	MRB_TYPE_SIZE tmpLen;
+
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_LOCK(mrb);
+#endif
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_START(mrb);
+#endif
+
+	tmpLen = MRB_len(mrb); // get current length
+	if(tmpLen < len) len = tmpLen; // no enough data, only delete the existing data
+	mrb->start += len; // move the data header to delete
 	if(mrb->start >= mrb->size) mrb->start -= mrb->size;
-	return len; // *Return the length of successfully delete data
+
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_END(mrb);
+#endif
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_UNLOCK(mrb);
+#endif
+
+	return len; // return the length of successfully delete data
 }
 
 /* read from mrb */
 MRB_TYPE_USE mrb_read(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 {
-	MRB_TYPE_SIZE ringBufLenNow = MRB_len(mrb); // get current len
-	//if(ringBufLenNow == 0) return 0;//no data
-	if(ringBufLenNow < len) len = ringBufLenNow;//*If the data is insufficient, only read the existing ones
-	else ringBufLenNow = len; // *Temporarily store the value of len as the return value
-	while(len--){
-		// *buf++ = mrb->buf[mrb->start++];
-		// if(mrb->start >= mrb->size) mrb->start = 0;
-		MRB_read_one(mrb, *buf++);
-	}
-	return ringBufLenNow; // *Return the length of successfully read data
+	MRB_TYPE_SIZE tmpLen;
+
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_LOCK(mrb);
+#endif
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_START(mrb);
+#endif
+
+	tmpLen = MRB_len(mrb); // get current length
+	if(tmpLen < len) len = tmpLen; // no enough data, only read the existing data
+	else tmpLen = len; // temporarily store the value of len as the return value
+
+#if MRB_COPY_METHOD == MRB_COPY_METHOD_LOOP
+	while(len--){ MRB_read_one(mrb, *buf++); }
+#elif MRB_COPY_METHOD == MRB_COPY_METHOD_MRBCPY
+
+#elif MRB_COPY_METHOD == MRB_COPY_METHOD_MEMCPY
+
+#else
+	#error "MRB_COPY_METHOD ERROR!"
+#endif
+
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_END(mrb);
+#endif
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_UNLOCK(mrb);
+#endif
+
+	return tmpLen; // return the length of successfully read data
 }
 
 /* write to mrb */
 MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 {
-	MRB_TYPE_SIZE tmpLen = MRB_len(mrb); // get current len
+	MRB_TYPE_SIZE tmpLen;
+
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_LOCK(mrb);
+#endif
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_START(mrb);
+#endif
+
+	tmpLen = MRB_len(mrb); // get current length
 	if(tmpLen + len >= mrb->size){ // no enough space
-		if(0) mrb_errHandle(mrb, 0x00); // err handle
-		return 2;
+#if MRB_CALLBACK_EN
+		if(mrb->callback) mrb->callback(mrb, 123);
+#endif
+		if(mrb->set == MRB_SET_NOWRITE) len = 0;
+		else if(mrb->set == MRB_SET_PARTWRITE) len = mrb->size - tmpLen - 1;
+		else if(mrb->set == MRB_SET_OVERWRITE){
+			len = 0;
+		}
 	}
+
 #if MRB_COPY_METHOD == MRB_COPY_METHOD_LOOP
-	while(len--){
-		MRB_write_one(mrb, *buf++);
-		// mrb->buf[mrb->end++] = *buf++;
-		// if(mrb->end >= mrb->size) mrb->end = 0;
-	}
+	while(len--){ MRB_write_one(mrb, *buf++); }
 #elif MRB_COPY_METHOD == MRB_COPY_METHOD_MRBCPY
 
 #elif MRB_COPY_METHOD == MRB_COPY_METHOD_MEMCPY
@@ -90,15 +179,18 @@ MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 #else
 	#error "MRB_COPY_METHOD ERROR!"
 #endif
+
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_END(mrb);
+#endif
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_UNLOCK(mrb);
+#endif
+
 	return 0;
 }
 
-/* err handle */
-MRB_TYPE_BYTE mrb_errHandle(MiniRingBuf *mrb, uint8_t err)
-{
-	
-	return 0;
-}
+
 
 
 

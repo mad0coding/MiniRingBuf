@@ -1,9 +1,16 @@
+/*
+	File:    main.c
+	Author:  Light&Electricity
+	Date:    2025.6.19
+	Version: 0.5
+*/
 #include <stdio.h>
 #include <stdint.h>
 #include <stdlib.h>
 
-#include "RingBuf.h"
+#include "MiniRingBuf.h"
 
+uint32_t inCnt = 0, outCnt, inSum = 0, outSum = 0;
 
 MiniRingBuf ringTest;
 uint8_t ringBufArray[100];
