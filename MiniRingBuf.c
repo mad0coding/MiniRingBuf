@@ -1,7 +1,7 @@
 /*
 	File:    MiniRingBuf.c
 	Author:  Light&Electricity
-	Date:    2025.6.19
+	Date:    2025.6.20
 	Version: 0.5
 */
 #include "MiniRingBuf.h"
@@ -13,6 +13,9 @@ void mrb_init(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_SIZE size, MRB_TYPE_
 	mrb->buf = buf;
 	mrb->size = size;
 	mrb->set = set;
+#if MRB_MUTEX_EN
+	mrb->mutex = (void*)0; // NULL
+#endif
 #if MRB_CALLBACK_EN
 	mrb->callback = (void*)0; // NULL
 #endif
@@ -115,14 +118,24 @@ MRB_TYPE_USE mrb_read(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 
 	tmpLen = MRB_len(mrb); // get current length
 	if(tmpLen < len) len = tmpLen; // no enough data, only read the existing data
-	else tmpLen = len; // temporarily store the value of len as the return value
+	else tmpLen = len; // save len as return value
 
 #if MRB_COPY_METHOD == MRB_COPY_METHOD_LOOP
 	while(len--){ MRB_read_one(mrb, *buf++); }
 #elif MRB_COPY_METHOD == MRB_COPY_METHOD_MRBCPY
 
 #elif MRB_COPY_METHOD == MRB_COPY_METHOD_MEMCPY
-
+	tmpLen = mrb->size - mrb->start;
+	if(len <= tmpLen){
+		MRB_COPY_FUNC(buf, &mrb->buf[mrb->start], sizeof(MRB_TYPE_BUF) * len);
+		mrb->start += len;
+	}
+	else{
+		MRB_COPY_FUNC(buf, &mrb->buf[mrb->start], sizeof(MRB_TYPE_BUF) * tmpLen);
+		MRB_COPY_FUNC(&buf[tmpLen], &mrb->buf[0], sizeof(MRB_TYPE_BUF) * (len - tmpLen));
+		mrb->start = len - tmpLen;
+	}
+	tmpLen = len; // save len as return value
 #else
 	#error "MRB_COPY_METHOD ERROR!"
 #endif
@@ -154,13 +167,13 @@ MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 #if MRB_CALLBACK_EN
 		if(mrb->callback) mrb->callback(mrb, 123);
 #endif
-		if(mrb->set == MRB_SET_NOWRITE) len = 0;
+		if(mrb->set == MRB_SET_SKIPWRITE) len = 0;
 		else if(mrb->set == MRB_SET_PARTWRITE) len = mrb->size - tmpLen - 1;
 		else if(mrb->set == MRB_SET_OVERWRITE){
 			len = 0;
 		}
 	}
-	tmpLen = len; // temporarily store the value of len as the return value
+	tmpLen = len; // save len as return value
 
 #if MRB_COPY_METHOD == MRB_COPY_METHOD_LOOP
 	while(len--){ MRB_write_one(mrb, *buf++); }
@@ -169,14 +182,15 @@ MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 #elif MRB_COPY_METHOD == MRB_COPY_METHOD_MEMCPY
 	tmpLen = mrb->size - mrb->end;
 	if(len <= tmpLen){
-		MRB_COPY_MEMCPY(&mrb->buf[mrb->end], buf, sizeof(MRB_TYPE_BUF) * len);
+		MRB_COPY_FUNC(&mrb->buf[mrb->end], buf, sizeof(MRB_TYPE_BUF) * len);
 		mrb->end += len;
 	}
 	else{
-		MRB_COPY_MEMCPY(&mrb->buf[mrb->end], buf, sizeof(MRB_TYPE_BUF) * tmpLen);
-		MRB_COPY_MEMCPY(&mrb->buf[0], &buf[tmpLen], sizeof(MRB_TYPE_BUF) * (len - tmpLen));
+		MRB_COPY_FUNC(&mrb->buf[mrb->end], buf, sizeof(MRB_TYPE_BUF) * tmpLen);
+		MRB_COPY_FUNC(&mrb->buf[0], &buf[tmpLen], sizeof(MRB_TYPE_BUF) * (len - tmpLen));
 		mrb->end = len - tmpLen;
 	}
+	tmpLen = len; // save len as return value
 #else
 	#error "MRB_COPY_METHOD ERROR!"
 #endif

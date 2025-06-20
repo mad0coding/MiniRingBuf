@@ -1,13 +1,15 @@
 /*
 	File:    MiniRingBuf.h
 	Author:  Light&Electricity
-	Date:    2025.6.19
+	Date:    2025.6.20
 	Version: 0.5
 */
 #ifndef _MINIRINGBUF_H
 #define _MINIRINGBUF_H
 
 #include <stdint.h>
+
+#include <pthread.h>
 
 /* Type definition */
 #define MRB_TYPE_BYTE	uint8_t		// byte type
@@ -18,21 +20,20 @@
 
 /* Settings definition */
 #define MRB_CALLBACK_EN				1 // enable err handle callback
-#define MRB_ERR_		0x01
 
 /* Thread safety options */
 #define MRB_CRITICAL_EN				0 // critical section enable
 #define MRB_CRITICAL_START(mrb)		// critical section start, add code here
 #define MRB_CRITICAL_END(mrb)		// critical section end, add code here
-#define MRB_MUTEX_EN				0 // mutex enable
-#define MRB_MUTEX_LOCK(mrb)			// mutex lock, add code here
-#define MRB_MUTEX_UNLOCK(mrb)		// mutex unlock, add code here
+#define MRB_MUTEX_EN				1 // mutex enable
+#define MRB_MUTEX_LOCK(mrb)			pthread_mutex_lock(mrb->mutex)// mutex lock, add code here
+#define MRB_MUTEX_UNLOCK(mrb)		pthread_mutex_unlock(mrb->mutex)// mutex unlock, add code here
 
 /* Copy method option */
-#define MRB_COPY_METHOD			MRB_COPY_METHOD_LOOP
-#define MRB_COPY_METHOD_LOOP	0	// use a simple loop
-#define MRB_COPY_METHOD_MEMCPY	1	// use memcpy()
-#define MRB_COPY_METHOD_MRBCPY	2	// use a simple copy function
+#define MRB_COPY_METHOD				MRB_COPY_METHOD_MEMCPY
+#define MRB_COPY_METHOD_LOOP		0	// use a simple loop
+#define MRB_COPY_METHOD_MEMCPY		1	// use memcpy()
+#define MRB_COPY_METHOD_MRBCPY		2	// use a simple copy function
 #if MRB_COPY_METHOD == MRB_COPY_METHOD_MEMCPY
 #define MRB_COPY_FUNC(dest, src, size)	memcpy(dest, src, size)
 #else
@@ -40,17 +41,15 @@
 #endif
 
 
-#define MRB_SET_NOWRITE		0x00
+#define MRB_SET_SKIPWRITE	0x00
 #define MRB_SET_PARTWRITE	0x01
 #define MRB_SET_OVERWRITE	0x02
-#define MRB_SET_BUF			0x08
-
 
 
 /* Buffer struct definition */
 typedef struct _MiniRingBuf{
 	MRB_TYPE_BUF *buf;
-	MRB_TYPE_SIZE start, end, size;
+	MRB_TYPE_SIZE start, end, size; // (size-1) is the max num of items
 	MRB_TYPE_BYTE set; // setting
 #if MRB_MUTEX_EN
 	void *mutex;
