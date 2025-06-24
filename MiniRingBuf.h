@@ -1,7 +1,7 @@
 /*
 	File:    MiniRingBuf.h
 	Author:  Light&Electricity
-	Date:    2025.6.20
+	Date:    2025.6.24
 	Version: 0.5
 */
 #ifndef _MINIRINGBUF_H
@@ -18,16 +18,19 @@
 #define MRB_TYPE_SIZE	uint16_t	// length type
 #define MRB_TYPE_USE	uint16_t	// read/write length type, must <= MRB_TYPE_SIZE
 
-/* Settings definition */
-#define MRB_CALLBACK_EN				1 // enable err handle callback
+/* Callback enable */
+#define MRB_CALLBACK_NODATA			(1*1)	// no enough data to read
+#define MRB_CALLBACK_NOSPACE		(2*1)	// no enough space to write
+#define MRB_CALLBACK_EMPTY			(3*1)	// buf empty
+#define MRB_CALLBACK_FULL			(4*1)	// buf full
 
 /* Thread safety options */
 #define MRB_CRITICAL_EN				0 // critical section enable
 #define MRB_CRITICAL_START(mrb)		// critical section start, add code here
 #define MRB_CRITICAL_END(mrb)		// critical section end, add code here
 #define MRB_MUTEX_EN				1 // mutex enable
-#define MRB_MUTEX_LOCK(mrb)			pthread_mutex_lock(mrb->mutex)// mutex lock, add code here
-#define MRB_MUTEX_UNLOCK(mrb)		pthread_mutex_unlock(mrb->mutex)// mutex unlock, add code here
+#define MRB_MUTEX_LOCK(mrb)			pthread_mutex_lock(mrb->mutex) // mutex lock, add code here
+#define MRB_MUTEX_UNLOCK(mrb)		pthread_mutex_unlock(mrb->mutex) // mutex unlock, add code here
 
 /* Copy method option */
 #define MRB_COPY_METHOD				MRB_COPY_METHOD_MEMCPY
@@ -54,7 +57,7 @@ typedef struct _MiniRingBuf{
 #if MRB_MUTEX_EN
 	void *mutex;
 #endif
-#if MRB_CALLBACK_EN
+#if MRB_CALLBACK_NODATA || MRB_CALLBACK_NOSPACE || MRB_CALLBACK_EMPTY || MRB_CALLBACK_FULL
 	void (*callback)(struct _MiniRingBuf*, MRB_TYPE_BYTE);
 #endif
 }MiniRingBuf;

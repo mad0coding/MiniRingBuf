@@ -23,13 +23,13 @@ pthread_mutex_t mutex_mrb = PTHREAD_MUTEX_INITIALIZER, mutex_thread = PTHREAD_MU
 uint32_t inCnt = 0, outCnt = 0, inSum = 0, outSum = 0;
 
 MiniRingBuf ringBuf;
-MRB_TYPE_BUF bufData[10000];
+MRB_TYPE_BUF bufData[1000];
 
-void RW_rand_test(MiniRingBuf *mrb, int n){
-	MRB_TYPE_BUF inBuf[10000];
-	MRB_TYPE_BUF outBuf[10000];
+void RW_rand_test(MiniRingBuf *mrb, int n, int p){
+	MRB_TYPE_BUF inBuf[1000];
+	MRB_TYPE_BUF outBuf[1000];
 	for(int i = 0; ; i++){
-		if(i > n || rand() % 2){ // read
+		if(i > n || rand() % 100 >= p){ // read
 			if(i > n && mrb_len(&ringBuf) == 0) break;
 			int len = rand() % (sizeof(outBuf)/sizeof(MRB_TYPE_BUF));
 			len = mrb_read(&ringBuf, outBuf, len);
@@ -57,7 +57,7 @@ void* thread_function(void* arg) {
     printf("thread %d running, time:%d\n", *(int*)arg, clock());
 	UNLOCK;
 	
-	RW_rand_test(&ringBuf, 100000);
+	RW_rand_test(&ringBuf, 10000000, *(int*)arg == 1 ? 0 : 100);
 	//sleep(1);
 
 	LOCK;
@@ -76,7 +76,7 @@ int main()
 #if MRB_MUTEX_EN
 	ringBuf.mutex = &mutex_mrb;
 #endif
-#if MRB_CALLBACK_EN
+#if MRB_CALLBACK_NOSPACE
 	ringBuf.callback = callback;
 #endif
 
