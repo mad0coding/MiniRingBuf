@@ -1,7 +1,7 @@
 /*
 	File:    main.c
 	Author:  Light&Electricity
-	Date:    2025.6.20
+	Date:    2025.6.26
 	Version: 0.5
 */
 #include <stdio.h>
@@ -26,8 +26,10 @@ MiniRingBuf ringBuf;
 MRB_TYPE_BUF bufData[1000];
 
 void RW_rand_test(MiniRingBuf *mrb, int n, int p){
-	MRB_TYPE_BUF inBuf[1000];
-	MRB_TYPE_BUF outBuf[1000];
+	MRB_TYPE_BUF inBufRaw[1000+4];
+	MRB_TYPE_BUF outBufRaw[1000+4];
+	MRB_TYPE_BUF *inBuf = inBufRaw + 1*0;
+	MRB_TYPE_BUF *outBuf = outBufRaw + 1*0;
 	for(int i = 0; ; i++){
 		if(i > n || rand() % 100 >= p){ // read
 			if(i > n && mrb_len(&ringBuf) == 0) break;
@@ -36,7 +38,7 @@ void RW_rand_test(MiniRingBuf *mrb, int n, int p){
 
 			LOCK;
 			outCnt += len;
-			for(int j = 0; j < len; j++) outSum += outBuf[j];
+			for(int j = 0; j < len; j++) outSum += outBuf[j];// ^ (outCnt - len + j);
 			UNLOCK;
 		}
 		else{ // write
@@ -46,7 +48,7 @@ void RW_rand_test(MiniRingBuf *mrb, int n, int p){
 
 			LOCK;
 			inCnt += len;
-			for(int j = 0; j < len; j++) inSum += inBuf[j];
+			for(int j = 0; j < len; j++) inSum += inBuf[j];// ^ (inCnt - len + j);
 			UNLOCK;
 		}
 	}
@@ -57,7 +59,7 @@ void* thread_function(void* arg) {
     printf("thread %d running, time:%d\n", *(int*)arg, clock());
 	UNLOCK;
 	
-	RW_rand_test(&ringBuf, 10000000, *(int*)arg == 1 ? 0 : 100);
+	RW_rand_test(&ringBuf, 1000*1000*100, *(int*)arg == 1 ? 0+50*0 : 100-50*0);
 	//sleep(1);
 
 	LOCK;
@@ -76,7 +78,7 @@ int main()
 #if MRB_MUTEX_EN
 	ringBuf.mutex = &mutex_mrb;
 #endif
-#if MRB_CALLBACK_NOSPACE
+#if MRB_CALLBACK_ANY
 	ringBuf.callback = callback;
 #endif
 
@@ -108,6 +110,7 @@ int main()
 
 	printf("inCnt:	%u,	inSum:	%u.\n", inCnt, inSum);
 	printf("outCnt:	%u,	outSum:	%u.\n", outCnt, outSum);
+	printf("difCnt:	%u,		difSum:	%u.\n", inCnt - outCnt, inSum - outSum);
 
 	return 0;
 }

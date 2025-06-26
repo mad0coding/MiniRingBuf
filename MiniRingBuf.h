@@ -1,7 +1,7 @@
 /*
 	File:    MiniRingBuf.h
 	Author:  Light&Electricity
-	Date:    2025.6.24
+	Date:    2025.6.26
 	Version: 0.5
 */
 #ifndef _MINIRINGBUF_H
@@ -9,7 +9,7 @@
 
 #include <stdint.h>
 
-#include <pthread.h>
+#include <pthread.h> // TEST CODE!!!
 
 /* Type definition */
 #define MRB_TYPE_BYTE	uint8_t		// byte type
@@ -19,28 +19,31 @@
 #define MRB_TYPE_USE	uint16_t	// read/write length type, must <= MRB_TYPE_SIZE
 
 /* Callback enable */
-#define MRB_CALLBACK_NODATA			(1*1)	// no enough data to read
-#define MRB_CALLBACK_NOSPACE		(2*1)	// no enough space to write
-#define MRB_CALLBACK_EMPTY			(3*1)	// buf empty
-#define MRB_CALLBACK_FULL			(4*1)	// buf full
+#define MRB_CALLBACK_NODATA			(1*0)	// no enough data to read
+#define MRB_CALLBACK_NOSPACE		(2*0)	// no enough space to write
+#define MRB_CALLBACK_EMPTY			(3*0)	// buf empty
+#define MRB_CALLBACK_FULL			(4*0)	// buf full
+#define MRB_CALLBACK_ANY			((MRB_CALLBACK_NODATA) || (MRB_CALLBACK_NOSPACE) \
+									|| (MRB_CALLBACK_EMPTY) || (MRB_CALLBACK_FULL))
 
 /* Thread safety options */
+#define MRB_SISO_SAFE				1 // single input single output safe
 #define MRB_CRITICAL_EN				0 // critical section enable
 #define MRB_CRITICAL_START(mrb)		// critical section start, add code here
 #define MRB_CRITICAL_END(mrb)		// critical section end, add code here
-#define MRB_MUTEX_EN				1 // mutex enable
+#define MRB_MUTEX_EN				0 // mutex enable
 #define MRB_MUTEX_LOCK(mrb)			pthread_mutex_lock(mrb->mutex) // mutex lock, add code here
 #define MRB_MUTEX_UNLOCK(mrb)		pthread_mutex_unlock(mrb->mutex) // mutex unlock, add code here
 
 /* Copy method option */
-#define MRB_COPY_METHOD				MRB_COPY_METHOD_MEMCPY
+#define MRB_COPY_METHOD				MRB_COPY_METHOD_LOOP
 #define MRB_COPY_METHOD_LOOP		0	// use a simple loop
 #define MRB_COPY_METHOD_MEMCPY		1	// use memcpy()
 #define MRB_COPY_METHOD_MRBCPY		2	// use a simple copy function
 #if MRB_COPY_METHOD == MRB_COPY_METHOD_MEMCPY
 #define MRB_COPY_FUNC(dest, src, size)	memcpy(dest, src, size)
 #else
-#define MRB_COPY_FUNC(dest, src, size)	memcpy(dest, src, size)
+#define MRB_COPY_FUNC(dest, src, size)	mrb_memcpy(dest, src, size)
 #endif
 
 
@@ -54,10 +57,10 @@ typedef struct _MiniRingBuf{
 	MRB_TYPE_BUF *buf;
 	MRB_TYPE_SIZE start, end, size; // (size-1) is the max num of items
 	MRB_TYPE_BYTE set; // setting
-#if MRB_MUTEX_EN
+#if (MRB_MUTEX_EN)
 	void *mutex;
 #endif
-#if MRB_CALLBACK_NODATA || MRB_CALLBACK_NOSPACE || MRB_CALLBACK_EMPTY || MRB_CALLBACK_FULL
+#if (MRB_CALLBACK_ANY)
 	void (*callback)(struct _MiniRingBuf*, MRB_TYPE_BYTE);
 #endif
 }MiniRingBuf;
@@ -65,13 +68,15 @@ typedef struct _MiniRingBuf{
 
 
 /* Macro functions */
-#define MRB_clear(mrb)	((mrb)->end = (mrb)->start)
-#define MRB_empty(mrb)	((mrb)->end == (mrb)->start)
-#define MRB_full(mrb)	(((mrb)->start > 0 && (mrb)->end == (mrb)->start - 1) || \
-						((mrb)->start == 0 && (mrb)->end == (mrb)->size - 1))
-#define MRB_len(mrb)	(((mrb)->end < (mrb)->start) ? \
-						((mrb)->size + (mrb)->end - (mrb)->start) : \
-						((mrb)->end - (mrb)->start))
+#define MRB_clear(mrb)		((mrb)->end = (mrb)->start)
+#define MRB_empty(mrb)		((mrb)->end == (mrb)->start)
+#define MRB_full(mrb)		(((mrb)->start > 0 && (mrb)->end == (mrb)->start - 1) || \
+							((mrb)->start == 0 && (mrb)->end == (mrb)->size - 1))
+#define MRB_len(mrb)		MRB_len_calculate((mrb)->size, (mrb)->start, (mrb)->end)
+#define MRB_len_calculate(size, start, end) \
+							(((end) < (start)) ? \
+							((size) + (end) - (start)) : \
+							((end) - (start)))
 
 /* Write one item. Check buf is not full before writing. */
 #define MRB_write_one(mrb, item)	do{ \
@@ -98,6 +103,10 @@ MRB_TYPE_SIZE mrb_len(MiniRingBuf *mrb);
 MRB_TYPE_USE mrb_del(MiniRingBuf *mrb, MRB_TYPE_USE len);
 MRB_TYPE_USE mrb_read(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len);
 MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len);
+
+#if MRB_COPY_METHOD == MRB_COPY_METHOD_MRBCPY
+void* mrb_memcpy(void *dest, const void *src, size_t n);
+#endif
 
 
 
