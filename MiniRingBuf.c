@@ -256,7 +256,7 @@ MRB_TYPE_USE mrb_read(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 }
 
 /* write to mrb */
-MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
+MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, const MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 {
 	MRB_TYPE_SIZE tmpLen;
 #if (MRB_SISO_SAFE)
@@ -322,6 +322,54 @@ MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 	return tmpLen;
 }
 
+#if MRB_COPY_METHOD == MRB_COPY_METHOD_MRBCPY
+/* a simple memcpy function for 32bit core */
+void* mrb_memcpy(void *dest, const void *src, uint32_t n)
+{
+    uint8_t *d = (uint8_t *)dest;
+    const uint8_t *s = (const uint8_t *)src;
+
+    if(((uintptr_t)d & 0x03) == ((uintptr_t)s & 0x03)){ // 4-byte aligned
+        while(((uintptr_t)d & 0x03) && n > 0){ // copy unaligned bytes
+			n--;
+            *d++ = *s++;
+        }
+
+        // use uint32_t to copy
+        uint32_t *dw = (uint32_t *)d;
+        const uint32_t *sw = (const uint32_t *)s;
+        uint32_t n_words = n >> 2; // n / 4
+        for(uint32_t i = 0; i < n_words; i++) dw[i] = sw[i]; // copy words
+
+        // update the pointer for remaining data
+        d = (uint8_t *)(dw + n_words);
+        s = (const uint8_t *)(sw + n_words);
+        n &= 0x03; // n % 4
+    }
+    else if (((uintptr_t)d & 0x01) == ((uintptr_t)s & 0x01)) { // 2-byte aligned
+        if(((uintptr_t)d & 0x01) && n > 0){ // copy unaligned byte
+			n--;
+            *d++ = *s++;
+        }
+
+        // use uint16_t to copy
+        uint16_t *dw = (uint16_t *)d;
+        const uint16_t *sw = (const uint16_t *)s;
+        uint32_t n_words = n >> 1; // n / 2
+        for (uint32_t i = 0; i < n_words; i++) dw[i] = sw[i]; // copy halfwords
+
+        // update the pointer for remaining data
+        d = (uint8_t *)(dw + n_words);
+        s = (const uint8_t *)(sw + n_words);
+        n &= 0x01; // n % 2
+    }
+	// else unaligned
+
+    for(uint32_t i = 0; i < n; i++) d[i] = s[i]; // copy all remaining bytes
+
+    return dest;
+}
+#endif
 
 
 
