@@ -1,7 +1,7 @@
 /*
 	File:    MiniRingBuf.c
 	Author:  Light&Electricity
-	Date:    2025.6.26
+	Date:    2025.6.27
 	Version: 0.5
 */
 #include "MiniRingBuf.h"
@@ -105,15 +105,15 @@ MRB_TYPE_USE mrb_del(MiniRingBuf *mrb, MRB_TYPE_USE len)
 #endif
 
 #if (MRB_SISO_SAFE) // get current length safely
+	tmpEnd = mrb->end; // get END first to make a conservative estimate of length
 	tmpLen = mrb->start;
-	tmpEnd = mrb->end;
 	tmpLen = MRB_len_calculate(mrb->size, tmpLen, tmpEnd);
 #else
 	tmpLen = MRB_len(mrb); // get current length quickly
 #endif
 
 	if(tmpLen < len) len = tmpLen; // no enough data, only delete the existing data
-	mrb->start += len; // move the data header to delete
+	mrb->start += len; // move START to delete
 	if(mrb->start >= mrb->size) mrb->start -= mrb->size;
 
 #if (MRB_CALLBACK_EMPTY)
@@ -128,6 +128,68 @@ MRB_TYPE_USE mrb_del(MiniRingBuf *mrb, MRB_TYPE_USE len)
 #endif
 
 	return len; // return the length of successfully delete data
+}
+
+/* copy from mrb without deleting */
+MRB_TYPE_USE mrb_copy(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
+{
+	MRB_TYPE_SIZE tmpLen;
+#if (MRB_SISO_SAFE)
+	MRB_TYPE_SIZE tmpEnd;
+#endif
+
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_LOCK(mrb);
+#endif
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_START(mrb);
+#endif
+
+#if (MRB_SISO_SAFE) // get current length safely
+	tmpEnd = mrb->end; // get END first to make a conservative estimate of length
+	tmpLen = mrb->start;
+	tmpLen = MRB_len_calculate(mrb->size, tmpLen, tmpEnd);
+#else
+	tmpLen = MRB_len(mrb); // get current length quickly
+#endif
+
+	if(tmpLen < len){
+#if (MRB_CALLBACK_NODATA)
+		if(mrb->callback) mrb->callback(mrb, MRB_CALLBACK_NODATA);
+#endif
+		len = tmpLen; // no enough data, only read the existing data
+	}
+	else tmpLen = len; // save len as return value
+
+#if MRB_COPY_METHOD == MRB_COPY_METHOD_LOOP
+	for(len = 0; len < tmpLen && mrb->start + len < mrb->size;){
+		*buf++ = mrb->buf[mrb->start + len++];
+	}
+	while(len < tmpLen){
+		*buf++ = mrb->buf[mrb->start + len++ - mrb->size];
+	}
+#elif MRB_COPY_METHOD == MRB_COPY_METHOD_MEMCPY || MRB_COPY_METHOD == MRB_COPY_METHOD_MRBCPY
+	tmpLen = mrb->size - mrb->start;
+	if(len < tmpLen){
+		MRB_COPY_FUNC(buf, &mrb->buf[mrb->start], sizeof(MRB_TYPE_BUF) * len);
+	}
+	else{
+		MRB_COPY_FUNC(buf, &mrb->buf[mrb->start], sizeof(MRB_TYPE_BUF) * tmpLen);
+		MRB_COPY_FUNC(&buf[tmpLen], &mrb->buf[0], sizeof(MRB_TYPE_BUF) * (len - tmpLen));
+	}
+	tmpLen = len; // save len as return value
+#else
+	#error "MRB_COPY_METHOD ERROR!"
+#endif
+
+#if (MRB_CRITICAL_EN)
+	MRB_CRITICAL_END(mrb);
+#endif
+#if (MRB_MUTEX_EN)
+	MRB_MUTEX_UNLOCK(mrb);
+#endif
+
+	return tmpLen; // return the length of successfully read data
 }
 
 /* read from mrb */
@@ -146,8 +208,8 @@ MRB_TYPE_USE mrb_read(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 #endif
 
 #if (MRB_SISO_SAFE) // get current length safely
+	tmpEnd = mrb->end; // get END first to make a conservative estimate of length
 	tmpLen = mrb->start;
-	tmpEnd = mrb->end;
 	tmpLen = MRB_len_calculate(mrb->size, tmpLen, tmpEnd);
 #else
 	tmpLen = MRB_len(mrb); // get current length quickly
@@ -165,7 +227,7 @@ MRB_TYPE_USE mrb_read(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 	while(len--){ MRB_read_one(mrb, *buf++); }
 #elif MRB_COPY_METHOD == MRB_COPY_METHOD_MEMCPY || MRB_COPY_METHOD == MRB_COPY_METHOD_MRBCPY
 	tmpLen = mrb->size - mrb->start;
-	if(len <= tmpLen){
+	if(len < tmpLen){
 		MRB_COPY_FUNC(buf, &mrb->buf[mrb->start], sizeof(MRB_TYPE_BUF) * len);
 		mrb->start += len;
 	}
@@ -210,7 +272,7 @@ MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 
 #if (MRB_SISO_SAFE) // get current length safely
 	tmpLen = mrb->start;
-	tmpEnd = mrb->end;
+	tmpEnd = mrb->end; // get END late to make a conservative estimate of space
 	tmpLen = MRB_len_calculate(mrb->size, tmpLen, tmpEnd);
 #else
 	tmpLen = MRB_len(mrb); // get current length quickly
@@ -232,7 +294,7 @@ MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len)
 	while(len--){ MRB_write_one(mrb, *buf++); }
 #elif MRB_COPY_METHOD == MRB_COPY_METHOD_MEMCPY || MRB_COPY_METHOD == MRB_COPY_METHOD_MRBCPY
 	tmpLen = mrb->size - mrb->end;
-	if(len <= tmpLen){
+	if(len < tmpLen){
 		MRB_COPY_FUNC(&mrb->buf[mrb->end], buf, sizeof(MRB_TYPE_BUF) * len);
 		mrb->end += len;
 	}

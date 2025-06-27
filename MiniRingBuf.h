@@ -1,7 +1,7 @@
 /*
 	File:    MiniRingBuf.h
 	Author:  Light&Electricity
-	Date:    2025.6.26
+	Date:    2025.6.27
 	Version: 0.5
 */
 #ifndef _MINIRINGBUF_H
@@ -101,6 +101,7 @@ MRB_TYPE_BOOL mrb_empty(MiniRingBuf *mrb);
 MRB_TYPE_BOOL mrb_full(MiniRingBuf *mrb);
 MRB_TYPE_SIZE mrb_len(MiniRingBuf *mrb);
 MRB_TYPE_USE mrb_del(MiniRingBuf *mrb, MRB_TYPE_USE len);
+MRB_TYPE_USE mrb_copy(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len);
 MRB_TYPE_USE mrb_read(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len);
 MRB_TYPE_USE mrb_write(MiniRingBuf *mrb, MRB_TYPE_BUF *buf, MRB_TYPE_USE len);
 

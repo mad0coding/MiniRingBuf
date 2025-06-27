@@ -1,7 +1,7 @@
 /*
 	File:    main.c
 	Author:  Light&Electricity
-	Date:    2025.6.26
+	Date:    2025.6.27
 	Version: 0.5
 */
 #include <stdio.h>
@@ -33,8 +33,16 @@ void RW_rand_test(MiniRingBuf *mrb, int n, int p){
 	for(int i = 0; ; i++){
 		if(i > n || rand() % 100 >= p){ // read
 			if(i > n && mrb_len(&ringBuf) == 0) break;
-			int len = rand() % (sizeof(outBuf)/sizeof(MRB_TYPE_BUF));
-			len = mrb_read(&ringBuf, outBuf, len);
+			int len = rand() % (sizeof(outBufRaw)/sizeof(MRB_TYPE_BUF));
+			//len = mrb_read(&ringBuf, outBuf, len);
+			//printf("%d	", len);
+			int lens[3] = {len};
+			lens[1] = mrb_copy(&ringBuf, outBuf, len);
+			//printf("%d	", len);
+			lens[2] = mrb_del(&ringBuf, lens[1]);
+			if(lens[1] != lens[2]) printf("%d	%d	%d	\n", lens[0], lens[1], lens[2]);
+			
+			len = lens[2];
 
 			LOCK;
 			outCnt += len;
@@ -42,7 +50,7 @@ void RW_rand_test(MiniRingBuf *mrb, int n, int p){
 			UNLOCK;
 		}
 		else{ // write
-			int len = rand() % (sizeof(inBuf)/sizeof(MRB_TYPE_BUF));
+			int len = rand() % (sizeof(inBufRaw)/sizeof(MRB_TYPE_BUF));
 			for(int j = 0; j < len; j++) inBuf[j] = rand();
 			len = mrb_write(&ringBuf, inBuf, len);
 
@@ -54,12 +62,12 @@ void RW_rand_test(MiniRingBuf *mrb, int n, int p){
 	}
 }
 
-void* thread_function(void* arg) {
+void* thread_function(void* arg){
 	LOCK;
     printf("thread %d running, time:%d\n", *(int*)arg, clock());
 	UNLOCK;
 	
-	RW_rand_test(&ringBuf, 1000*1000*100, *(int*)arg == 1 ? 0+50*0 : 100-50*0);
+	RW_rand_test(&ringBuf, 1000*1000*10, *(int*)arg == 1 ? 0+50*0 : 100-50*0);
 	//sleep(1);
 
 	LOCK;
@@ -110,7 +118,7 @@ int main()
 
 	printf("inCnt:	%u,	inSum:	%u.\n", inCnt, inSum);
 	printf("outCnt:	%u,	outSum:	%u.\n", outCnt, outSum);
-	printf("difCnt:	%u,		difSum:	%u.\n", inCnt - outCnt, inSum - outSum);
+	printf("difCnt:	%d,		difSum:	%d.\n", inCnt - outCnt, inSum - outSum);
 
 	return 0;
 }
